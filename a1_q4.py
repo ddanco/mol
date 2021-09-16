@@ -45,33 +45,42 @@ class Flow:
     return self.flow[arc]
 
 
-def get_optimal_flow(instance: SelfishRoutingInstance) -> Flow:
+def get_nash_flow(instance: SelfishRoutingInstance) -> Flow:
   # As this is not the focus of the problem, and we have
   # the solution already described in the lecture notes,
   # I am omitting this algorithm.
   ...
 
 
+def get_optimal_flow(instance: SelfishRoutingInstance) -> Flow:
+  # Same comment as get_nash_flow
+  ...
+
+
 def calculate_tolls_from_flows(
-    # nash_flow: Flow,
     instance: SelfishRoutingInstance,
+    nash_flow: Flow,
     optimal_flow: Flow,
     sensitivity: float) -> Tolls:
 
-  def get_arc_latency(arc: Arc) -> float:
-    return instance.latencies(arc)(optimal_flow(arc)(2.0)) # FIXME
-
-  max_latency = -1.0
-  for arc in optimal_flow.flow:
-    if get_arc_latency(arc) > max_latency:
-      max_latency = get_arc_latency(arc)
-      print('max: ', max_latency)
+  def get_commodity(arc: Arc) -> float:
+    # This will only work for commodities between connected
+    # vertices. For the sake of keeping this assignment somewhat
+    # brief, I am leaving it this way, but for a proper solution,
+    # should add graph functionality to check if arc is *on* any
+    # path from commodity source to target, not just if they are
+    # equal.
+    for commodity in instance.commodities:
+      if arc[0:2] == commodity.pair[0:2]:
+        return commodity.demand
+    return 0.0
 
   def calculate_toll(arc: Arc) -> float:
-    if optimal_flow(arc)(2.0) == 0: # FIXME
+    flow_difference = nash_flow(arc)(get_commodity(arc)) \
+                        - optimal_flow(arc)(get_commodity(arc))
+    if flow_difference <= 0:
       return 0.0
-    print('latency, ', get_arc_latency(arc))
-    return (max_latency - get_arc_latency(arc)) / sensitivity
+    return flow_difference / sensitivity
 
   return lambda A: calculate_toll(A)
 
@@ -79,6 +88,7 @@ def calculate_tolls_from_flows(
 def get_tolls(instance: SelfishRoutingInstance, sensitivity: float) -> Tolls:
   return calculate_tolls_from_flows(
     instance,
+    get_nash_flow(instance),
     get_optimal_flow(instance),
     sensitivity)
 
@@ -99,16 +109,19 @@ if __name__ == '__main__':
 
   pigou_latencies = Latencies({
     ('s', 't', 'top'): lambda x: x,
-    ('s', 't', 'bottom'): lambda x: 4.0})
+    ('s', 't', 'bottom'): lambda x: 1.0})
 
   example_instance = SelfishRoutingInstance(
     pigou_graph,
     pigou_latencies,
-    (Commodity(('s', 't'), 4),))
+    (Commodity(('s', 't'), 1),))
 
   example_optimal_flow = Flow({
     ('s', 't', 'top'): lambda x: 0.5*x,
     ('s', 't', 'bottom'): lambda x: 0.5*x})
+  example_nash_flow = Flow({
+    ('s', 't', 'top'): lambda x: x,
+    ('s', 't', 'bottom'): lambda x: 0.0})
   example_sensitivity = 1
 
   # For this example, we provide the flow, but if get_optimal_flow
@@ -117,6 +130,7 @@ if __name__ == '__main__':
     example_instance,
     calculate_tolls_from_flows(
       example_instance,
+      example_nash_flow,
       example_optimal_flow,
       example_sensitivity))
 
