@@ -5,15 +5,15 @@ from typing import Callable, Dict, FrozenSet, Optional, Tuple
 
 
 Vertex = str
-Arc = Tuple[Vertex, Vertex, 'str']
+# Includes name to distinguish arcs with identical vertices
+Arc = Tuple[Vertex, Vertex, str]
 Tolls = Callable[[Arc], float]
 
 
 @dataclass
 class Graph:
   vertices: FrozenSet[Vertex]
-  # Includes name to distinguish arcs with identical vertices
-  arcs: FrozenSet[Tuple[Vertex, Vertex, str]]
+  arcs: FrozenSet[Arc]
 
 
 @dataclass
@@ -71,13 +71,14 @@ def calculate_tolls_from_flows(
     # path from commodity source to target, not just if they are
     # equal.
     for commodity in instance.commodities:
-      if arc[0:2] == commodity.pair[0:2]:
+      if arc[:-1] == commodity.pair:
         return commodity.demand
     return 0.0
 
   def calculate_toll(arc: Arc) -> float:
-    flow_difference = nash_flow(arc)(get_commodity(arc)) \
-                        - optimal_flow(arc)(get_commodity(arc))
+    flow_on_nash = nash_flow(arc)(get_commodity(arc))
+    flow_on_optimal = optimal_flow(arc)(get_commodity(arc))
+    flow_difference = flow_on_nash - flow_on_optimal
     if flow_difference <= 0:
       return 0.0
     return flow_difference / sensitivity
@@ -124,8 +125,8 @@ if __name__ == '__main__':
     ('s', 't', 'bottom'): lambda x: 0.0})
   example_sensitivity = 1
 
-  # For this example, we provide the flow, but if get_optimal_flow
-  # were implemented, we would call get_tolls
+  # For this example, we provide the flows, but if
+  # get_optimal_flow were implemented, we would call get_tolls
   print_tolls(
     example_instance,
     calculate_tolls_from_flows(
